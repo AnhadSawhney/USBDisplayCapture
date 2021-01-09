@@ -3,6 +3,8 @@
 
 #include <iostream>
 #include <Windows.h>
+#include <assert.h>
+#include "libusb.h"
 
 #define BITS_PER_PIXEL 24
 #define BITS_PER_CHANNEL 8
@@ -23,6 +25,8 @@ typedef struct RGB RGB_t;
 #define PIXEL(f, x, y) f[y * WIDTH + x]
 
 BITMAPINFOHEADER bi;
+
+using namespace std;
 
 void drawArray(RGB_t arr[]) {
 	COLORREF* cref = (COLORREF*)calloc(WIDTH * HEIGHT, sizeof(COLORREF));
@@ -75,6 +79,43 @@ void GetArray(RGB_t arr[]) {
 	DeleteObject(hCaptureBitmap);
 }
 
+void printdev(libusb_device* dev) {
+		libusb_device_descriptor desc;
+		int r = libusb_get_device_descriptor(dev, &desc);
+		if (r < 0) {
+				cout << "failed to get device descriptor" << endl;
+				return;
+		}
+		cout << "Number of possible configurations: " << (int)desc.bNumConfigurations << "  ";
+		cout << "Device Class: " << (int)desc.bDeviceClass << "  ";
+		cout << "VendorID: " << hex << desc.idVendor << dec << "  ";
+		cout << "ProductID: " << hex << desc.idProduct << dec << endl;
+		libusb_config_descriptor * config;
+		libusb_get_config_descriptor(dev, 0, &config);
+		cout << "Interfaces: " << (int)config->bNumInterfaces << endl;
+		const libusb_interface * inter;
+		const libusb_interface_descriptor * interdesc;
+		const libusb_endpoint_descriptor * epdesc;
+		for (int i = 0; i < (int)config->bNumInterfaces; i++) {
+				inter = &config->interface[i];
+				cout << "Number of alternate settings: " << inter->num_altsetting << " | ";
+				for (int j = 0; j < inter->num_altsetting; j++) {
+						interdesc = &inter->altsetting[j];
+						cout << "Interface Number: " << (int)interdesc->bInterfaceNumber << " | ";
+						cout << "Number of endpoints: " << (int)interdesc->bNumEndpoints << " | ";
+						for (int k = 0; k < (int)interdesc->bNumEndpoints; k++) {
+								epdesc = &interdesc->endpoint[k];
+								cout << "Descriptor Type: " << (int)epdesc->bDescriptorType << " | ";
+								cout << "EP Address: " << (int)epdesc->bEndpointAddress << " | ";
+						}
+				}
+				cout << endl;
+		}
+		cout << endl << endl << endl;
+		libusb_free_config_descriptor(config);
+}
+
+
 int main() {
     CoInitialize(nullptr); // NULL if using older VC++
 
@@ -92,32 +133,30 @@ int main() {
 
 	RGB_t* R = (RGB_t*)calloc(WIDTH * HEIGHT, sizeof(RGB_t));
 
-	//clear
-	while (1) {
-		
-		//memset(R, 0, WIDTH* HEIGHT * sizeof(R[0]));
+	libusb_device* dev;
+	libusb_device_handle* handle;
+	libusb_init(NULL); //initialize a library session
+	libusb_set_debug(NULL, 3); //set verbosity level to 3, as suggested in the documentation
+	handle = libusb_open_device_with_vid_pid(NULL, 0x0483, 0x5740);
+	cout << handle << " " << endl;
+	assert(handle != NULL);
+	dev = libusb_get_device(handle);
+	printdev(dev);
+	libusb_claim_interface(handle, 0);
+	
+	unsigned char request[] = "Test", response[8];
+	memset(response, 0, sizeof(response));
 
-		/*for (int i = 0; i < WIDTH; i++) {
-			for (int j = 0; j < i; j++) {
-				R[i][j][0] = 255; //BGR
-				R[i][j][1] = 0;
-				R[i][j][2] = 0;
-			}
-		}*/
+	while (1) {
 		GetArray(R);
+
+		libusb_bulk_transfer(handle, 0x01, reinterpret_cast<unsigned char *>(R), sizeof(R), NULL, 0);
+		//libusb_bulk_transfer(handle, 0x82, response, sizeof(response), &bytes_transferred, 0);
+
 		drawArray(R);
 	}
 
-    std::cout << "Hello World!\n";
+	libusb_release_interface(handle, 0);
+	libusb_close(handle);
+	libusb_exit(NULL); //close the session
 }
-
-// Run program: Ctrl + F5 or Debug > Start Without Debugging menu
-// Debug program: F5 or Debug > Start Debugging menu
-
-// Tips for Getting Started: 
-//   1. Use the Solution Explorer window to add/manage files
-//   2. Use the Team Explorer window to connect to source control
-//   3. Use the Output window to see build output and other messages
-//   4. Use the Error List window to view errors
-//   5. Go to Project > Add New Item to create new code files, or Project > Add Existing Item to add existing code files to the project
-//   6. In the future, to open this project again, go to File > Open > Project and select the .sln file
