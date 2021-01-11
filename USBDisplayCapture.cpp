@@ -131,7 +131,10 @@ int main() {
 	bi.biClrUsed = 0;
 	bi.biClrImportant = 0;
 
-	RGB_t* R = (RGB_t*)calloc(WIDTH * HEIGHT, sizeof(RGB_t));
+	//RGB_t* R = (RGB_t*)calloc(WIDTH * HEIGHT, sizeof(RGB_t));
+
+	RGB_t R[WIDTH * HEIGHT];
+	unsigned char out[WIDTH * HEIGHT * 3];
 
 	libusb_device* dev;
 	libusb_device_handle* handle;
@@ -142,15 +145,45 @@ int main() {
 	assert(handle != NULL);
 	dev = libusb_get_device(handle);
 	printdev(dev);
-	libusb_claim_interface(handle, 0);
+	cout << libusb_claim_interface(handle, 0) << endl;
 	
 	unsigned char request[] = "Test", response[8];
 	memset(response, 0, sizeof(response));
 
+	int ret, bytes_transferred;
+
 	while (1) {
 		GetArray(R);
 
-		libusb_bulk_transfer(handle, 0x01, reinterpret_cast<unsigned char *>(R), sizeof(R), NULL, 0);
+		for (uint8_t y = 0; y < HEIGHT; y++) {
+			for (uint8_t x = 0; x < WIDTH; x++) {
+				out[WIDTH * 3*y + x] = PIXEL(R, x, y).R;
+				out[WIDTH * (3*y+1) + x] = PIXEL(R, x, y).G;
+				out[WIDTH * (3*y+2) + x] = PIXEL(R, x, y).B;
+			}
+		}
+
+		ret = libusb_bulk_transfer(handle, 0x01, out, WIDTH*HEIGHT*3, &bytes_transferred, 0); //libusb will automatically divide into packets
+		switch (ret) {
+			case 0:
+				printf("%d bytes sent\n", bytes_transferred);
+				break;
+			case LIBUSB_ERROR_TIMEOUT:
+				printf("ERROR in bulk write: %d Timeout\n", ret);
+				break;
+			case LIBUSB_ERROR_PIPE:
+				printf("ERROR in bulk write: %d Pipe\n", ret);
+				break;
+			case LIBUSB_ERROR_OVERFLOW:
+				printf("ERROR in bulk write: %d Overflow\n", ret);
+				break;
+			case LIBUSB_ERROR_NO_DEVICE:
+				printf("ERROR in bulk write: %d No Device\n", ret);
+				break;
+			default:
+				printf("ERROR in bulk write: %d Unknown\n", ret);
+				break;
+		}
 		//libusb_bulk_transfer(handle, 0x82, response, sizeof(response), &bytes_transferred, 0);
 
 		drawArray(R);
