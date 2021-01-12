@@ -8,11 +8,11 @@
 
 #define BITS_PER_PIXEL 24
 #define BITS_PER_CHANNEL 8
-#define WIDTH 64
+#define WIDTH 128
 #define HEIGHT 64
 
-#define CAPTUREX 100
-#define CAPTUREY 200
+#define CAPTUREX 300
+#define CAPTUREY 300
 
 struct RGB {
 	uint8_t R;
@@ -133,7 +133,7 @@ int main() {
 
 	//RGB_t* R = (RGB_t*)calloc(WIDTH * HEIGHT, sizeof(RGB_t));
 
-	RGB_t R[WIDTH * HEIGHT];
+	RGB_t arr[WIDTH * HEIGHT];
 	unsigned char out[WIDTH * HEIGHT * 3];
 
 	libusb_device* dev;
@@ -153,15 +153,22 @@ int main() {
 	int ret, bytes_transferred;
 
 	while (1) {
-		GetArray(R);
+		GetArray(arr);
 
-		for (uint8_t y = 0; y < HEIGHT; y++) {
-			for (uint8_t x = 0; x < WIDTH; x++) {
-				out[WIDTH * 3*y + x] = PIXEL(R, x, y).R;
-				out[WIDTH * (3*y+1) + x] = PIXEL(R, x, y).G;
-				out[WIDTH * (3*y+2) + x] = PIXEL(R, x, y).B;
+		for (uint8_t color = 0; color < 3; color++) {
+			uint32_t offset = HEIGHT * WIDTH * color;
+			uint32_t i = 0;
+			for (uint32_t y = 0; y < HEIGHT; y++) {
+				for (int x = WIDTH - 1; x >= 0; x--) {
+					if (color == 0) out[offset + i] = PIXEL(arr, x, y).R;
+					if (color == 1) out[offset + i] = PIXEL(arr, x, y).G;
+					if (color == 2) out[offset + i] = PIXEL(arr, x, y).B;
+					i++;
+				}
 			}
 		}
+
+		// output array is 3 full frames sequentially, for each color channel
 
 		ret = libusb_bulk_transfer(handle, 0x01, out, WIDTH*HEIGHT*3, &bytes_transferred, 0); //libusb will automatically divide into packets
 		switch (ret) {
@@ -186,7 +193,7 @@ int main() {
 		}
 		//libusb_bulk_transfer(handle, 0x82, response, sizeof(response), &bytes_transferred, 0);
 
-		drawArray(R);
+		drawArray(arr);
 	}
 
 	libusb_release_interface(handle, 0);
