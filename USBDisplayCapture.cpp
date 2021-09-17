@@ -115,6 +115,29 @@ void printdev(libusb_device* dev) {
 		libusb_free_config_descriptor(config);
 }
 
+struct libusb_device_handle* usb_init(struct libusb_context* context) {
+	struct libusb_device** device_list;
+	struct libusb_device_handle* handle = NULL;
+
+	int deviceCount = libusb_get_device_list(context, &device_list);
+
+	int i;
+	for (i = 0; i < deviceCount; i++) {
+		struct libusb_device* device = device_list[i];
+		struct libusb_device_descriptor desc;
+		libusb_get_device_descriptor(device, &desc);
+		cout << "Vendor:Device = " << hex << desc.idVendor << " " << desc.idProduct << dec << endl;
+		if (desc.idVendor == 0x0483 && desc.idProduct == 0x5740) {
+			cout << libusb_open(device, &handle) << endl;
+			break;
+		}
+	}
+
+	libusb_free_device_list(device_list, 1);
+
+	return handle;
+}
+
 
 int main() {
     CoInitialize(nullptr); // NULL if using older VC++
@@ -138,9 +161,13 @@ int main() {
 
 	libusb_device* dev;
 	libusb_device_handle* handle;
-	libusb_init(NULL); //initialize a library session
-	libusb_set_debug(NULL, 3); //set verbosity level to 3, as suggested in the documentation
-	handle = libusb_open_device_with_vid_pid(NULL, 0x0483, 0x5740);
+	libusb_context* context = NULL;
+	libusb_init(&context); //initialize a library session
+	libusb_set_debug(context, 3); //set verbosity level to 3, as suggested in the documentation'
+
+	//handle = libusb_open_device_with_vid_pid(NULL, 0x0483, 0x5740);
+	handle = usb_init(context);
+
 	cout << handle << " " << endl;
 	assert(handle != NULL);
 	dev = libusb_get_device(handle);
